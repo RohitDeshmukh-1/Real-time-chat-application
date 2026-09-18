@@ -1,0 +1,142 @@
+:root {
+  --line: #d9dce1;
+  --muted: #6b7280;
+  --mine: #1f6feb;
+  font-family: system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f7f8fa;
+  color: #14181f;
+}
+
+.screen {
+  max-width: 640px;
+  height: 100dvh;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-inline: 1px solid var(--line);
+}
+
+.join {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(280px, 80%);
+}
+
+.join h1 {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+
+input {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 15px;
+}
+
+button {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--mine);
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+button:disabled {
+  background: var(--line);
+  cursor: not-allowed;
+}
+
+.bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.status {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.status-connected {
+  color: #1a7f37;
+}
+
+.status-error,
+.status-disconnected {
+  color: #b42318;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0;
+  padding: 16px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.messages li {
+  max-width: 75%;
+}
+
+.messages li.mine {
+  align-self: flex-end;
+  text-align: right;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+
+.bubble {
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #eef0f3;
+  word-break: break-word;
+  text-align: left;
+}
+
+.mine .bubble {
+  background: var(--mine);
+  color: #fff;
+}
+
+.system {
+  align-self: center;
+  max-width: 100%;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.composer {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+}
+
+.composer input {
+  flex: 1;
+}
