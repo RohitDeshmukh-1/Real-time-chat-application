@@ -19,24 +19,25 @@ class ConnectionManager:
     """Keeps every live WebSocket in memory. No database, no Redis."""
 
     def __init__(self) -> None:
-        self.connections: dict[str, WebSocket] = {}
+        self.connections: list[WebSocket] = []
 
-    async def connect(self, username: str, websocket: WebSocket) -> None:
+    async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
-        self.connections[username] = websocket
+        self.connections.append(websocket)
 
-    def disconnect(self, username: str) -> None:
-        self.connections.pop(username, None)
+    def disconnect(self, websocket: WebSocket) -> None:
+        if websocket in self.connections:
+            self.connections.remove(websocket)
 
     async def broadcast(self, payload: dict) -> None:
-        dead = []
-        for username, websocket in self.connections.items():
+        dead: list[WebSocket] = []
+        for websocket in list(self.connections):
             try:
                 await websocket.send_json(payload)
             except Exception:
-                dead.append(username)
-        for username in dead:
-            self.disconnect(username)
+                dead.append(websocket)
+        for websocket in dead:
+            self.disconnect(websocket)
 
 
 manager = ConnectionManager()
@@ -58,15 +59,18 @@ def health() -> dict:
 
 @app.websocket("/ws/{username}")
 async def chat(websocket: WebSocket, username: str) -> None:
-    await manager.connect(username, websocket)
+    await manager.connect(websocket)
     await manager.broadcast(event("system", "server", f"{username} joined"))
     try:
         while True:
             text = await websocket.receive_text()
+            # Ignore heartbeat pings
+            if text == "ping":
+                continue
             if text.strip():
                 await manager.broadcast(event("message", username, text))
     except WebSocketDisconnect:
         pass
     finally:
-        manager.disconnect(username)
+        manager.disconnect(websocket)
         await manager.broadcast(event("system", "server", f"{username} left"))

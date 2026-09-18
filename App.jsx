@@ -23,19 +23,60 @@ export default function App() {
   useEffect(() => {
     if (!joined) return;
 
-    setStatus("connecting");
-    const socket = new WebSocket(`${WS_URL}/ws/${encodeURIComponent(username)}`);
-    socketRef.current = socket;
+    let isCancelled = false;
+    let reconnectTimer = null;
+    let pingInterval = null;
 
-    socket.onopen = () => setStatus("connected");
-    socket.onclose = () => setStatus("disconnected");
-    socket.onerror = () => setStatus("error");
-    socket.onmessage = (raw) => {
-      const data = JSON.parse(raw.data);
-      setMessages((prev) => [...prev, data]);
+    function connect() {
+      if (isCancelled) return;
+      setStatus("connecting");
+
+      const socket = new WebSocket(`${WS_URL}/ws/${encodeURIComponent(username)}`);
+      socketRef.current = socket;
+
+      socket.onopen = () => {
+        setStatus("connected");
+        // Keep-alive heartbeat every 25 seconds for cloud hosting (Render/Cloudflare)
+        pingInterval = setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send("ping");
+          }
+        }, 25000);
+      };
+
+      socket.onmessage = (raw) => {
+        try {
+          const data = JSON.parse(raw.data);
+          setMessages((prev) => [...prev, data]);
+        } catch {
+          // ignore non-JSON messages
+        }
+      };
+
+      socket.onclose = () => {
+        clearInterval(pingInterval);
+        setStatus("disconnected");
+        // Auto-reconnect after 2 seconds if still joined
+        if (!isCancelled) {
+          reconnectTimer = setTimeout(connect, 2000);
+        }
+      };
+
+      socket.onerror = () => {
+        setStatus("error");
+      };
+    }
+
+    connect();
+
+    return () => {
+      isCancelled = true;
+      clearInterval(pingInterval);
+      clearTimeout(reconnectTimer);
+      if (socketRef.current) {
+        socketRef.current.close();
+      }
     };
-
-    return () => socket.close();
   }, [joined, username]);
 
   useEffect(() => {
