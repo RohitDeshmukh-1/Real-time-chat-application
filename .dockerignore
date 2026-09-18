@@ -1,0 +1,12 @@
+node_modules/
+.venv/
+venv/
+dist/
+dist-ssr/
+__pycache__/
+*.py[cod]
+.git
+.gitignore
+.env
+.env.*
+README.md
