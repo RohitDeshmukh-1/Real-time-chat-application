@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -5,8 +6,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Realtime Chat MVP")
 
-# WebSockets are not subject to CORS, but this keeps the health check
-# usable from the browser during debugging.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,37 +15,80 @@ app.add_middleware(
 
 
 class ConnectionManager:
-    """Keeps every live WebSocket in memory. No database, no Redis."""
+    """Manages active WebSocket connections and user presence in memory."""
 
     def __init__(self) -> None:
-        self.connections: list[WebSocket] = []
+        # username -> set of active WebSockets for that user (supports multiple tabs)
+        self.users: dict[str, set[WebSocket]] = {}
+        # websocket -> username
+        self.sockets: dict[WebSocket, str] = {}
 
-    async def connect(self, websocket: WebSocket) -> None:
+    async def connect(self, username: str, websocket: WebSocket) -> None:
         await websocket.accept()
-        self.connections.append(websocket)
+        if username not in self.users:
+            self.users[username] = set()
+        self.users[username].add(websocket)
+        self.sockets[websocket] = username
 
-    def disconnect(self, websocket: WebSocket) -> None:
-        if websocket in self.connections:
-            self.connections.remove(websocket)
+    def disconnect(self, websocket: WebSocket) -> str | None:
+        username = self.sockets.pop(websocket, None)
+        if username and username in self.users:
+            self.users[username].discard(websocket)
+            if not self.users[username]:
+                del self.users[username]
+        return username
+
+    def get_online_users(self) -> list[str]:
+        return sorted(list(self.users.keys()))
 
     async def broadcast(self, payload: dict) -> None:
         dead: list[WebSocket] = []
-        for websocket in list(self.connections):
+        for ws in list(self.sockets.keys()):
             try:
-                await websocket.send_json(payload)
+                await ws.send_json(payload)
             except Exception:
-                dead.append(websocket)
-        for websocket in dead:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
+
+    async def broadcast_user_list(self) -> None:
+        await self.broadcast({
+            "type": "user_list",
+            "users": self.get_online_users(),
+        })
+
+    async def send_direct(self, sender: str, recipient: str, text: str) -> None:
+        payload = event("message", sender, text, recipient=recipient)
+        # Send to recipient's active sockets
+        if recipient in self.users:
+            for ws in list(self.users[recipient]):
+                try:
+                    await ws.send_json(payload)
+                except Exception:
+                    self.disconnect(ws)
+        # Also echo back to sender's active sockets (so sender sees their message in DM thread)
+        if sender != recipient and sender in self.users:
+            for ws in list(self.users[sender]):
+                try:
+                    await ws.send_json(payload)
+                except Exception:
+                    self.disconnect(ws)
+
+    async def send_to_socket(self, websocket: WebSocket, payload: dict) -> None:
+        try:
+            await websocket.send_json(payload)
+        except Exception:
             self.disconnect(websocket)
 
 
 manager = ConnectionManager()
 
 
-def event(kind: str, sender: str, text: str) -> dict:
+def event(kind: str, sender: str, text: str, recipient: str = "all") -> dict:
     return {
         "type": kind,
         "sender": sender,
+        "recipient": recipient,
         "text": text,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
@@ -54,23 +96,46 @@ def event(kind: str, sender: str, text: str) -> dict:
 
 @app.get("/")
 def health() -> dict:
-    return {"status": "ok", "online": len(manager.connections)}
+    return {"status": "ok", "online_users": manager.get_online_users()}
 
 
 @app.websocket("/ws/{username}")
 async def chat(websocket: WebSocket, username: str) -> None:
-    await manager.connect(websocket)
+    await manager.connect(username, websocket)
+    await manager.broadcast_user_list()
     await manager.broadcast(event("system", "server", f"{username} joined"))
+
     try:
         while True:
-            text = await websocket.receive_text()
-            # Ignore heartbeat pings
-            if text == "ping":
+            raw_text = await websocket.receive_text()
+            if raw_text == "ping":
                 continue
-            if text.strip():
-                await manager.broadcast(event("message", username, text))
+
+            try:
+                data = json.loads(raw_text)
+                recipient = data.get("recipient", "all")
+                text = str(data.get("text", "")).strip()
+            except (json.JSONDecodeError, AttributeError):
+                recipient = "all"
+                text = raw_text.strip()
+
+            if not text:
+                continue
+
+            if recipient == "all":
+                await manager.broadcast(event("message", username, text, recipient="all"))
+            else:
+                if recipient not in manager.users:
+                    await manager.send_to_socket(
+                        websocket,
+                        event("system", "server", f"@{recipient} is currently offline", recipient=recipient),
+                    )
+                else:
+                    await manager.send_direct(username, recipient, text)
     except WebSocketDisconnect:
         pass
     finally:
-        manager.disconnect(websocket)
-        await manager.broadcast(event("system", "server", f"{username} left"))
+        user = manager.disconnect(websocket)
+        if user and user not in manager.users:
+            await manager.broadcast_user_list()
+            await manager.broadcast(event("system", "server", f"{user} left"))
