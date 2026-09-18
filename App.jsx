@@ -53,6 +53,12 @@ export default function App() {
 
       socket.onopen = () => {
         setStatus("connected");
+        // Immediately request online members list
+        try {
+          socket.send(JSON.stringify({ type: "get_users" }));
+        } catch {
+          // ignore
+        }
         // Keep-alive heartbeat every 25 seconds
         pingInterval = setInterval(() => {
           if (socket.readyState === WebSocket.OPEN) {
@@ -224,20 +230,20 @@ export default function App() {
 
           <div className="section-label online-label">
             <span>ONLINE MEMBERS</span>
-            <span className="online-count-tag">{otherUsers.length}</span>
+            <span className="online-count-tag">{onlineUsers.length}</span>
           </div>
 
           <div className="members-list">
-            {otherUsers.length === 0 ? (
-              <div className="no-members">No other members online yet</div>
+            {onlineUsers.length === 0 ? (
+              <div className="no-members">Connecting...</div>
             ) : (
-              otherUsers.map((user) => (
+              onlineUsers.map((user) => (
                 <button
                   key={user}
                   type="button"
                   className={`nav-item member-item ${
                     activeChat === user ? "active" : ""
-                  }`}
+                  } ${user === username ? "self-item" : ""}`}
                   onClick={() => selectChat(user)}
                 >
                   <div className="member-avatar-wrap">
@@ -246,7 +252,14 @@ export default function App() {
                     </span>
                     <span className="presence-dot" />
                   </div>
-                  <span className="nav-title">{user}</span>
+                  <span className="nav-title">
+                    {user} {user === username ? "(You)" : ""}
+                  </span>
+                  {user !== username && (
+                    <span className="direct-btn-tag">
+                      {activeChat === user ? "Chatting" : "Message"}
+                    </span>
+                  )}
                   {unreadCounts[user] > 0 && (
                     <span className="unread-badge">{unreadCounts[user]}</span>
                   )}
@@ -264,10 +277,10 @@ export default function App() {
           <button
             type="button"
             className="mobile-toggle-btn"
-            onClick={() => setIsSidebarOpen(true)}
-            aria-label="Open members menu"
+            onClick={() => setIsSidebarOpen((prev) => !prev)}
+            aria-label="Toggle members menu"
           >
-            ☰
+            👥 {onlineUsers.length} Online
           </button>
           <div className="chat-title-info">
             <h2>

@@ -113,8 +113,18 @@ async def chat(websocket: WebSocket, username: str) -> None:
 
             try:
                 data = json.loads(raw_text)
-                recipient = data.get("recipient", "all")
-                text = str(data.get("text", "")).strip()
+                if isinstance(data, dict) and data.get("type") == "get_users":
+                    await manager.send_to_socket(
+                        websocket,
+                        {
+                            "type": "user_list",
+                            "users": manager.get_online_users(),
+                        },
+                    )
+                    continue
+
+                recipient = data.get("recipient", "all") if isinstance(data, dict) else "all"
+                text = str(data.get("text", "")).strip() if isinstance(data, dict) else str(data).strip()
             except (json.JSONDecodeError, AttributeError):
                 recipient = "all"
                 text = raw_text.strip()

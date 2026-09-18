@@ -547,8 +547,46 @@ body {
   cursor: not-allowed;
 }
 
-/* Responsive Styles for Tablets & Mobile */
-@media (max-width: 768px) {
+.direct-btn-tag {
+  font-size: 11px;
+  color: var(--primary);
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.self-item {
+  opacity: 0.85;
+}
+
+.self-item .nav-title {
+  color: var(--text-muted);
+}
+
+.mobile-toggle-btn {
+  display: none;
+  background: #eff6ff;
+  color: var(--primary);
+  border: 1px solid #bfdbfe;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 16px;
+}
+
+/* Split-screen desktop / tablet styles (541px to 840px) */
+@media (max-width: 840px) and (min-width: 541px) {
+  .sidebar {
+    width: 220px;
+  }
+}
+
+/* Small mobile screens only (<= 540px) */
+@media (max-width: 540px) {
   .mobile-toggle-btn {
     display: block;
   }
@@ -557,6 +595,7 @@ body {
     position: absolute;
     top: 0;
     left: 0;
+    width: 260px;
     height: 100%;
     transform: translateX(-100%);
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
